@@ -85,6 +85,27 @@ services:
       - "SPARK_MASTER=spark://spark-master:7077"
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
 
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ARGS=--bind_ip_all
+    volumes:
+      - mongo_data:/data/db
+      - odbc_driver_volume:/odbc_driver_files
+
+  mongo-seed:
+    image: mongo
+    container_name: mongo-seed
+    depends_on:
+      - mongodb
+    volumes:
+      - ./mongo-seed:/docker-entrypoint-initdb.d:ro
+    command: bash -c "sleep 10 && mongosh --host mongodb --port 27017 /docker-entrypoint-initdb.d/init.js"
+
   jupyter:
     image: jupyter/pyspark-notebook:latest
     container_name: jupyter
@@ -94,33 +115,28 @@ services:
       - SPARK_OPTS="--master spark://spark-master:7077"
     volumes:
       - ./notebooks:/home/jovyan/notebooks
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=mongoadmin
-      - MONGO_INITDB_ROOT_PASSWORD=secret
+    depends_on:
+      - spark-master
+      - mongodb
 
   metabase:
-    image: metabase/metabase:latest
+    image: metabase/metabase
     container_name: metabase
+    restart: always
     ports:
       - "3000:3000"
+    depends_on:
+      - mongodb
     environment:
+      - MB_DB_TYPE=h2
       - MB_DB_FILE=/metabase.db/metabase.db
     volumes:
       - metabase_data:/metabase.db
-    depends_on:
-      - mongodb
 
 volumes:
   hadoop_namenode:
   hadoop_datanode:
   hadoop_historyserver:
-  mongodb_data:
+  mongo_data:
+  odbc_driver_volume:
   metabase_data:
